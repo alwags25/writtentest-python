@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FastAPI 流式 API 演示</title>
+<style>
+  :root {
+    --bg: #0b1020;
+    --panel: #141a2e;
+    --panel-2: #0f1527;
+    --line: #26304d;
+    --text: #e6ebf7;
+    --muted: #8b96b3;
+    --accent: #4f8cff;
+    --accent-2: #7c5cff;
+    --ok: #3ddc97;
+    --warn: #ffb454;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--text);
+    background:
+      radial-gradient(900px 500px at 15% -10%, rgba(79, 140, 255, .22), transparent 60%),
+      radial-gradient(700px 400px at 95% 0%, rgba(124, 92, 255, .16), transparent 60%),
+      var(--bg);
+  }
+  header {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 34px 22px 10px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+  }
+  header h1 { margin: 0; font-size: 26px; letter-spacing: .3px; }
+  header h1 span {
+    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub { margin: 0; color: var(--muted); font-size: 14px; flex: 1 1 420px; }
+  .pill {
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: rgba(20, 26, 46, .8);
+    white-space: nowrap;
+  }
+  .pill.busy { color: var(--ok); border-color: rgba(61, 220, 151, .45); }
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 14px 22px 60px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,.035), transparent 40%), var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, .28);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { margin: 0; font-size: 16px; font-weight: 600; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  code {
+    font-family: Consolas, "Cascadia Code", monospace;
+    font-size: 12px;
+    color: #a8c2ff;
+    background: rgba(79, 140, 255, .1);
+    border: 1px solid rgba(79, 140, 255, .18);
+    padding: 2px 7px;
+    border-radius: 6px;
+  }
+  .desc { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+  .actions { display: flex; gap: 9px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    border: 0;
+    border-radius: 9px;
+    padding: 9px 16px;
+    cursor: pointer;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    transition: filter .15s, transform .05s;
+  }
+  button:hover { filter: brightness(1.12); }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+  }
+  pre {
+    margin: 0;
+    min-height: 118px;
+    max-height: 240px;
+    overflow: auto;
+    padding: 12px 14px;
+    font-family: Consolas, "Cascadia Code", monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #d7e2ff;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #chat-out { min-height: 150px; max-height: 320px; }
+  .bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .bar > span {
+    display: block;
+    height: 100%;
+    width: 0%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), var(--ok));
+    transition: width .35s ease;
+  }
+  textarea {
+    width: 100%;
+    min-height: 66px;
+    resize: vertical;
+    font: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 11px 13px;
+    outline: none;
+  }
+  textarea:focus { border-color: rgba(79, 140, 255, .65); }
+  footer {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 22px 40px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  footer code { font-size: 11px; }
+  @media (max-width: 780px) {
+    main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>FastAPI <span>流式 API</span> 演示</h1>
+  <p class="sub">纯文本、SSE、NDJSON 与模拟 LLM 聊天，全部基于 <code>StreamingResponse</code> + 异步生成器。</p>
+  <button class="ghost" id="stop-all">全部停止</button>
+  <span class="pill" id="status">就绪</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. 纯文本流 <code>GET /api/stream/plain</code></h2>
+    <p class="desc">以 text/plain 逐片段返回文字，演示最基础的流式响应。</p>
+    <div class="actions">
+      <button data-action="plain">开始接收</button>
+    </div>
+    <pre id="plain-out">点击“开始接收”查看逐段到达的文本…</pre>
+  </section>
+
+  <section class="card">
+    <h2>2. SSE 进度 <code>GET /api/stream/sse</code></h2>
+    <p class="desc">Server-Sent Events 推送带事件名的 JSON，浏览器用 EventSource 订阅。</p>
+    <div class="actions">
+      <button data-action="sse">开始接收</button>
+    </div>
+    <div class="bar"><span id="sse-bar"></span></div>
+    <pre id="sse-out">等待 progress / done 事件…</pre>
+  </section>
+
+  <section class="card">
+    <h2>3. NDJSON <code>GET /api/stream/ndjson</code></h2>
+    <p class="desc">每行一条 JSON 记录，适合日志、数据导出等场景。</p>
+    <div class="actions">
+      <button data-action="ndjson">开始接收</button>
+    </div>
+    <pre id="ndjson-out">等待 JSON 记录逐行到达…</pre>
+  </section>
+
+  <section class="card">
+    <h2>4. 模拟 LLM 聊天 <code>POST /api/chat/stream</code></h2>
+    <p class="desc">EventSource 只支持 GET，所以这里用 fetch + ReadableStream 解析 SSE，逐 token 显示。</p>
+    <textarea id="chat-input">请用一句话介绍 FastAPI 的流式响应。</textarea>
+    <div class="actions">
+      <button data-action="chat">发送并流式接收</button>
+    </div>
+    <pre id="chat-out">等待提问…</pre>
+  </section>
+</main>
+
+<footer>
+  接口文档 <code>/docs</code> · 可用 curl 验证：<code>curl.exe -N http://127.0.0.1:8000/api/stream/sse</code>
+</footer>
+
+<script>
+  const statusEl = document.getElementById('status');
+  const controllers = new Set();
+  const sources = new Set();
+
+  function setStatus(text, busy = false) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('busy', busy);
+  }
+
+  function reset(id, placeholder = '') {
+    document.getElementById(id).textContent = placeholder;
+  }
+
+  function append(id, text) {
+    const el = document.getElementById(id);
+    el.textContent += text;
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function setBar(percent) {
+    document.getElementById('sse-bar').style.width = `${percent}%`;
+  }
+
+  function stopAll() {
+    controllers.forEach((c) => c.abort());
+    controllers.clear();
+    sources.forEach((s) => s.close());
+    sources.clear();
+    setStatus('已停止', false);
+  }
+
+  async function readStream(url, onChunk, options = {}) {
+    const controller = new AbortController();
+    controllers.add(controller);
+    try {
+      const res = await fetch(url, { ...options, signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      const started = performance.now();
+      let chunks = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks += 1;
+        await onChunk(decoder.decode(value, { stream: true }), { chunks, started });
+      }
+      return { chunks, elapsed: performance.now() - started };
+    } finally {
+      controllers.delete(controller);
+    }
+  }
+
+  async function runPlain() {
+    reset('plain-out');
+    setStatus('正在接收纯文本流…', true);
+    try {
+      const stats = await readStream('/api/stream/plain', (text) => append('plain-out', text));
+      append('plain-out', `\n\n[完成] ${stats.chunks} 个分片，共 ${(stats.elapsed / 1000).toFixed(2)} 秒`);
+      setStatus('纯文本流完成', false);
+    } catch (err) {
+      if (err.name !== 'AbortError') append('plain-out', `\n[错误] ${err.message}`);
+      setStatus('已中断', false);
+    }
+  }
+
+  function runSse() {
+    reset('sse-out');
+    setBar(0);
+    setStatus('正在接收 SSE 事件…', true);
+    const es = new EventSource('/api/stream/sse');
+    sources.add(es);
+
+    es.addEventListener('progress', (event) => {
+      const data = JSON.parse(event.data);
+      setBar(data.percent);
+      append('sse-out', `event: progress  step=${data.step}/${data.total}  percent=${data.percent}%\n`);
+    });
+
+    es.addEventListener('done', (event) => {
+      const data = JSON.parse(event.data);
+      setBar(100);
+      append('sse-out', `event: done  message="${data.message}"\n`);
+      setStatus('SSE 演示完成', false);
+      es.close();
+      sources.delete(es);
+    });
+
+    es.onerror = () => {
+      if (!sources.has(es)) return; // 已由 done 主动关闭
+      es.close();
+      sources.delete(es);
+      append('sse-out', '[错误] 连接中断，EventSource 已关闭\n');
+      setStatus('连接中断', false);
+    };
+  }
+
+  async function runNdjson() {
+    reset('ndjson-out');
+    setStatus('正在接收 NDJSON…', true);
+    let buffer = '';
+    let count = 0;
+    try {
+      const stats = await readStream('/api/stream/ndjson', (text) => {
+        buffer += text;
+        let index;
+        while ((index = buffer.indexOf('\n')) !== -1) {
+          const line = buffer.slice(0, index).trim();
+          buffer = buffer.slice(index + 1);
+          if (!line) continue;
+          const record = JSON.parse(line);
+          count += 1;
+          append('ndjson-out', `#${String(record.id).padStart(2, '0')}  value=${record.value.toFixed(2)}  ts=${new Date(record.ts * 1000).toLocaleTimeString()}\n`);
+        }
+      });
+      append('ndjson-out', `\n[完成] 共 ${count} 条记录，${(stats.elapsed / 1000).toFixed(2)} 秒`);
+      setStatus('NDJSON 接收完成', false);
+    } catch (err) {
+      if (err.name !== 'AbortError') append('ndjson-out', `[错误] ${err.message}`);
+      setStatus('已中断', false);
+    }
+  }
+
+  async function runChat() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim() || '你好';
+    reset('chat-out', `你：${message}\n助手：`);
+    setStatus('模型正在生成回复…', true);
+
+    let buffer = '';
+    try {
+      const stats = await readStream(
+        '/api/chat/stream',
+        (text) => {
+          buffer += text;
+          let index;
+          while ((index = buffer.indexOf('\n\n')) !== -1) {
+            const frame = buffer.slice(0, index);
+            buffer = buffer.slice(index + 2);
+
+            let eventName = 'message';
+            const dataLines = [];
+            for (const line of frame.split('\n')) {
+              if (line.startsWith('event:')) eventName = line.slice(6).trim();
+              else if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart());
+            }
+            if (!dataLines.length) continue;
+            const data = JSON.parse(dataLines.join('\n'));
+
+            if (eventName === 'token') append('chat-out', data.text);
+            else if (eventName === 'done') {
+              append('chat-out', `\n\n[done] ${data.tokens} tokens / ${data.elapsed_ms} ms\n`);
+            }
+          }
+        },
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, speed: 0.05 }),
+        },
+      );
+      setStatus(`聊天流完成（${(stats.elapsed / 1000).toFixed(2)} 秒）`, false);
+    } catch (err) {
+      if (err.name !== 'AbortError') append('chat-out', `\n[错误] ${err.message}`);
+      setStatus('已中断', false);
+    }
+  }
+
+  const actions = { plain: runPlain, sse: runSse, ndjson: runNdjson, chat: runChat };
+  document.querySelectorAll('[data-action]').forEach((button) => {
+    button.addEventListener('click', () => actions[button.dataset.action]());
+  });
+  document.getElementById('stop-all').addEventListener('click', stopAll);
+</script>
+</body>
+</html>
